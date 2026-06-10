@@ -563,52 +563,20 @@ def api_data():
 
 @app.route("/api/tick")
 def api_tick():
-    """Lightweight endpoint for 1-second price updates (NIFTY, BANKNIFTY, VIX)."""
-    import yfinance as yf
-
-    try:
-        # Fast single-ticker fetch for live tick
-        nifty_tick = yf.download("^NSEI", period="1d", interval="1m", auto_adjust=True, progress=False)
-        bank_tick = yf.download("^NSEBANK", period="1d", interval="1m", auto_adjust=True, progress=False)
-        vix_tick = yf.download("^INDIAVIX", period="1d", interval="1m", auto_adjust=True, progress=False)
-
-        def get_latest(df):
-            if df.empty:
-                return 0.0, 0.0, 0.0
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
-            price = float(df["Close"].iloc[-1])
-            if len(df) >= 2:
-                prev_close = float(df["Close"].iloc[0])  # day open
-                change = price - prev_close
-                change_pct = (change / prev_close) * 100 if prev_close != 0 else 0
-            else:
-                change = 0.0
-                change_pct = 0.0
-            return round(price, 2), round(change, 2), round(change_pct, 2)
-
-        nifty_price, nifty_chg, nifty_pct = get_latest(nifty_tick)
-        bank_price, bank_chg, bank_pct = get_latest(bank_tick)
-        vix_price, vix_chg, vix_pct = get_latest(vix_tick)
-
+    """Lightweight endpoint for 1-second price updates. Uses cached live_state (no external API calls)."""
+    with data_lock:
         return jsonify({
-            "nifty": nifty_price, "nifty_change": nifty_chg, "nifty_change_pct": nifty_pct,
-            "banknifty": bank_price, "banknifty_change": bank_chg, "banknifty_change_pct": bank_pct,
-            "vix": vix_price, "vix_change": vix_chg, "vix_change_pct": vix_pct,
+            "nifty": live_state["nifty"],
+            "nifty_change": live_state["nifty_change"],
+            "nifty_change_pct": live_state["nifty_change_pct"],
+            "banknifty": live_state["banknifty"],
+            "banknifty_change": live_state["banknifty_change"],
+            "banknifty_change_pct": live_state["banknifty_change_pct"],
+            "vix": live_state["vix"],
+            "vix_change": live_state["vix_change"],
+            "vix_change_pct": live_state["vix_change_pct"],
             "timestamp": datetime.now().strftime("%H:%M:%S")
         })
-    except Exception as e:
-        # Fallback to cached state
-        with data_lock:
-            return jsonify({
-                "nifty": live_state["nifty"], "nifty_change": live_state["nifty_change"],
-                "nifty_change_pct": live_state["nifty_change_pct"],
-                "banknifty": live_state["banknifty"], "banknifty_change": live_state["banknifty_change"],
-                "banknifty_change_pct": live_state["banknifty_change_pct"],
-                "vix": live_state["vix"], "vix_change": live_state["vix_change"],
-                "vix_change_pct": live_state["vix_change_pct"],
-                "timestamp": datetime.now().strftime("%H:%M:%S")
-            })
 
 
 @app.route("/api/best-trades")
@@ -693,18 +661,49 @@ def api_refresh():
     return jsonify({"status": "refresh_started"})
 
 
+@app.route("/health")
+def health_check():
+    """Health check endpoint for Render/load balancers."""
+    with data_lock:
+        last_update = live_state.get("last_update", "never")
+        error = live_state.get("error")
+        nifty = live_state.get("nifty", 0)
 
+    # Check if prediction thread is alive
+    thread_alive = prediction_thread.is_alive() if prediction_thread else False
+
+    status = "healthy" if thread_alive and not error else "degraded"
+
+    return jsonify({
+        "status": status,
+        "prediction_thread": "running" if thread_alive else "stopped",
+        "last_update": last_update,
+        "nifty_price": nifty,
+        "error": error,
+        "uptime_seconds": int(time.time() - app_start_time),
+    }), 200 if status == "healthy" else 503
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# RUN SERVER
+# PRODUCTION STARTUP (works under Gunicorn AND direct python)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-if __name__ == "__main__":
-    # Auto-refresh instruments.csv if older than 1 day
+app_start_time = time.time()
+prediction_thread = None
+
+
+def start_background_services():
+    """Start prediction loop and watchdog. Safe to call multiple times."""
+    global prediction_thread
+
+    if prediction_thread and prediction_thread.is_alive():
+        return  # Already running
+
+    init_trades_table()
+
+    # Refresh instruments if stale
     instruments_path = BASE_DIR / "instruments.csv"
     try:
-        import os
         file_age_hours = (time.time() - os.path.getmtime(instruments_path)) / 3600 if instruments_path.exists() else 999
         if file_age_hours > 24:
             logger.info("Refreshing instruments.csv (older than 24h)...")
@@ -717,14 +716,37 @@ if __name__ == "__main__":
     except Exception as e:
         logger.warning(f"Could not refresh instruments: {e}")
 
-    # Start background prediction loop
-    init_trades_table()
-    prediction_thread = threading.Thread(target=prediction_loop, daemon=True)
+    # Start prediction thread
+    prediction_thread = threading.Thread(target=prediction_loop_with_watchdog, daemon=True)
     prediction_thread.start()
+    logger.info("Background services started")
 
+
+def prediction_loop_with_watchdog():
+    """Wraps prediction_loop with auto-restart on crash."""
+    while True:
+        try:
+            prediction_loop()
+        except Exception as e:
+            logger.error(f"Prediction loop crashed: {e}")
+            logger.error(traceback.format_exc())
+            logger.info("Restarting prediction loop in 30 seconds...")
+            time.sleep(30)
+
+
+# Start background services when module is imported (works with Gunicorn)
+start_background_services()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RUN SERVER (direct execution)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+if __name__ == "__main__":
     print("\n" + "=" * 60)
-    print("   JPTrades Quantitative Trading Platform")
+    print("   JP.Trades Quantitative Trading Platform")
     print("   Dashboard: http://127.0.0.1:5000")
+    print("   Health:    http://127.0.0.1:5000/health")
     print("   API:       http://127.0.0.1:5000/api/data")
     print("   Access from phone: http://<your-pc-ip>:5000")
     print("=" * 60 + "\n")
