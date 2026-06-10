@@ -15,6 +15,7 @@ import threading
 import time
 import traceback
 import logging
+import platform
 from datetime import datetime
 from pathlib import Path
 
@@ -660,6 +661,60 @@ def api_market_debug():
     from market_data import get_diagnostics
     diag = get_diagnostics()
     return jsonify(diag)
+
+
+@app.route("/api/debug-yahoo")
+def debug_yahoo():
+    """Raw Yahoo Finance debug - test what Render actually gets."""
+    import yfinance as yf
+
+    output = {}
+
+    for symbol in ["^NSEI", "^NSEBANK", "^INDIAVIX"]:
+        try:
+            data = yf.download(
+                symbol,
+                period="5d",
+                interval="1d",
+                progress=False,
+                auto_adjust=True
+            )
+
+            if isinstance(data.columns, pd.MultiIndex):
+                data.columns = data.columns.get_level_values(0)
+
+            output[symbol] = {
+                "rows": len(data),
+                "empty": data.empty,
+                "columns": list(data.columns) if not data.empty else [],
+                "last_close": float(data["Close"].iloc[-1]) if not data.empty else None,
+                "last_date": str(data.index[-1]) if not data.empty else None,
+            }
+
+        except Exception as e:
+            output[symbol] = {
+                "error": str(e)
+            }
+
+    output["_meta"] = {
+        "timestamp": datetime.now().isoformat(),
+        "python": platform.python_version() if "platform" in dir() else "unknown",
+        "yfinance_version": yf.__version__,
+    }
+
+    return jsonify(output)
+
+
+@app.route("/api/news")
+def api_news():
+    """Fast news endpoint - returns cached headlines from last brief."""
+    brief = get_latest_brief()
+    if brief and brief.get("headlines"):
+        return jsonify({"headlines": brief["headlines"]})
+    # If no cached brief, fetch news directly (fast, no yfinance)
+    from premarket_brief import fetch_marketaux_news
+    news = fetch_marketaux_news(5)
+    return jsonify({"headlines": news})
 
 
 @app.route("/favicon.ico")
