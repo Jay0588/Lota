@@ -1,0 +1,27 @@
+{
+  "features": [
+    "RETURN_6",
+    "EMA_DIFF",
+    "MACD_SIGNAL",
+    "VIX_RETURN_3",
+    "MINUTE",
+    "EMA50",
+    "BB_UPPER",
+    "BANK_RETURN_1",
+    "EMA20",
+    "RETURN_3",
+    "MACD"
+  ],
+  "target_horizon": 3,
+  "target_threshold": 0.003,
+  "model_type": "CalibratedClassifierCV(ExtraTreesClassifier)",
+  "walk_forward_accuracy": 0.5229885057471265,
+  "walk_forward_f1": 0.30340557275541796,
+  "oos_accuracy": 0.6440677966101694,
+  "oos_f1": 0.7123287671232876,
+  "brier_score": 0.23169977290386284,
+  "n_features": 11,
+  "training_samples": 235,
+  "trained_at": "2026-06-10T10:24:06.960370",
+  "improvement_over_previous": 1.69
+}

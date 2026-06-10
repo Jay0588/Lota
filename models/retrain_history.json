@@ -1,0 +1,14 @@
+[
+  {
+    "status": "deployed",
+    "candidate_accuracy": 64.41,
+    "candidate_f1": 0.712,
+    "candidate_brier": 0.2317,
+    "current_accuracy": 62.71,
+    "improvement": 1.69,
+    "walk_forward_accuracy": 52.3,
+    "walk_forward_f1": 0.303,
+    "data_samples": 294,
+    "timestamp": "2026-06-10T10:24:06.481687"
+  }
+]

@@ -1,0 +1,85 @@
+{
+  "date": "2026-06-10",
+  "generated_at": "12:07:02",
+  "market_bias": "NEUTRAL",
+  "bias_reasons": [
+    "1 high-impact event(s): US CPI Data"
+  ],
+  "risk_level": "MEDIUM",
+  "risk_reasons": [
+    "1 major event(s) today"
+  ],
+  "sentiment": {
+    "bull": 0.0,
+    "neutral": 66.7,
+    "bear": 33.3
+  },
+  "regime": "Range Bound",
+  "guidance": "Rangebound market expected. Look for mean-reversion setups. Avoid chasing breakouts. Patience is key.",
+  "watchlist": [
+    "It",
+    "Tech"
+  ],
+  "events": [
+    {
+      "event": "US CPI Data",
+      "date": "2026-06-11",
+      "time": "18:00",
+      "country": "US",
+      "impact": "HIGH",
+      "category": "Inflation",
+      "countdown": "TOMORROW",
+      "days_away": 1
+    },
+    {
+      "event": "Weekly Options Expiry",
+      "date": "2026-06-11",
+      "time": "15:30",
+      "country": "IN",
+      "impact": "MEDIUM",
+      "category": "Expiry",
+      "countdown": "TOMORROW",
+      "days_away": 1
+    }
+  ],
+  "headlines": [
+    {
+      "title": "Nifty 50's Contribution to India Inc's Q4 Earnings Hits 21-Quarter Low",
+      "source": "rediff.com",
+      "published": "2026-06-10T05:27",
+      "sentiment": "BEARISH",
+      "url": "https://www.rediff.com/business/report/nifty-50s-share-in-india-inc-q4-earnings-declines-to-21-quarter-low-amid-sector-slowdown/20260610.htm"
+    },
+    {
+      "title": "CMR Green Tech share price debut at 43.4% premium on BSE",
+      "source": "thehindubusinessline.com",
+      "published": "2026-06-10T05:15",
+      "sentiment": "NEUTRAL",
+      "url": "https://www.thehindubusinessline.com/markets/cmr-green-technologies-shares-debut-at-434-premium-on-bse/article71083462.ece"
+    },
+    {
+      "title": "Stock markets today: Sensex, Nifty climb on buying in blue-chips",
+      "source": "rediff.com",
+      "published": "2026-06-10T05:01",
+      "sentiment": "NEUTRAL",
+      "url": "https://www.rediff.com/business/report/indian-stock-markets-rise-on-june-10-sensex-nifty-up-on-blue-chip-gains--cooling-crude-oil/20260610.htm"
+    }
+  ],
+  "global_context": [
+    {
+      "name": "S&P 500",
+      "change_pct": NaN,
+      "price": NaN
+    },
+    {
+      "name": "NASDAQ",
+      "change_pct": NaN,
+      "price": NaN
+    },
+    {
+      "name": "Crude Oil",
+      "change_pct": -0.45,
+      "price": 87.8
+    }
+  ]
+}
