@@ -744,6 +744,36 @@ def debug_providers():
     return jsonify(output)
 
 
+@app.route("/api/dependency-check")
+def dependency_check():
+    """Check all required imports and dependencies."""
+    deps = {}
+
+    modules = [
+        "SmartApi", "logzero", "pyotp", "flask", "pandas", "yfinance",
+        "sklearn", "joblib", "ta", "dotenv", "feedparser", "requests",
+        "websocket", "numpy"
+    ]
+
+    for mod in modules:
+        try:
+            m = __import__(mod)
+            version = getattr(m, "__version__", getattr(m, "VERSION", "ok"))
+            deps[mod] = {"status": "ok", "version": str(version)}
+        except ImportError as e:
+            deps[mod] = {"status": "MISSING", "error": str(e)}
+
+    # Test SmartApi specifically
+    try:
+        from SmartApi import SmartConnect
+        deps["SmartApi.SmartConnect"] = {"status": "ok"}
+    except Exception as e:
+        deps["SmartApi.SmartConnect"] = {"status": "FAILED", "error": str(e)}
+
+    all_ok = all(d["status"] == "ok" for d in deps.values())
+    return jsonify({"all_ok": all_ok, "dependencies": deps})
+
+
 @app.route("/api/smartapi-debug")
 def smartapi_debug():
     """Full SmartAPI diagnostic - shows exactly why it fails."""
