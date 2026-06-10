@@ -88,7 +88,7 @@ app = Flask(__name__)
 data_lock = threading.Lock()
 
 live_state = {
-    "signal": "LOADING",
+    "signal": "MARKET CLOSED",
     "confidence": 0.0,
     "signal_strength": "WEAK",
     "nifty": 0.0,
@@ -661,6 +661,13 @@ def api_market_debug():
     from market_data import get_diagnostics
     diag = get_diagnostics()
     return jsonify(diag)
+
+
+@app.route("/api/provider-status")
+def api_provider_status():
+    """Provider health and active source info."""
+    from market_data import get_provider_status
+    return jsonify(get_provider_status())
 
 
 @app.route("/api/debug-yahoo")
