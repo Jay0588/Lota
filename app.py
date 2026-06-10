@@ -654,6 +654,20 @@ def api_open_trades():
     return jsonify({"open_trades": trades})
 
 
+@app.route("/api/market-debug")
+def api_market_debug():
+    """Market data provider diagnostics."""
+    from market_data import get_diagnostics
+    diag = get_diagnostics()
+    return jsonify(diag)
+
+
+@app.route("/favicon.ico")
+def favicon():
+    """Serve favicon."""
+    return app.send_static_file("favicon.ico")
+
+
 @app.route("/api/refresh", methods=["POST"])
 def api_refresh():
     """Force a prediction refresh (useful for testing)."""
