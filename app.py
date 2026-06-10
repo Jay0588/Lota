@@ -714,8 +714,138 @@ def debug_yahoo():
 
 @app.route("/api/debug-providers")
 def debug_providers():
-    """Test multiple tickers across Yahoo to identify what works on this server."""
+    """Test multiple tickers and SmartAPI."""
     import yfinance as yf
+
+    symbols = ["^NSEI", "^NSEBANK", "RELIANCE.NS", "TCS.NS", "AAPL", "MSFT"]
+    output = {}
+
+    for symbol in symbols:
+        try:
+            start = time.time()
+            data = yf.download(symbol, period="5d", interval="1d", progress=False, auto_adjust=True)
+            duration = round(time.time() - start, 2)
+            if isinstance(data.columns, pd.MultiIndex):
+                data.columns = data.columns.get_level_values(0)
+            output[symbol] = {
+                "rows": len(data),
+                "empty": data.empty,
+                "last_close": round(float(data["Close"].iloc[-1]), 2) if not data.empty else None,
+                "duration_sec": duration,
+            }
+        except Exception as e:
+            output[symbol] = {"error": str(e)}
+
+    output["_meta"] = {
+        "timestamp": datetime.now().isoformat(),
+        "python": platform.python_version(),
+        "is_render": os.getenv("RENDER", "") != "",
+    }
+    return jsonify(output)
+
+
+@app.route("/api/smartapi-debug")
+def smartapi_debug():
+    """Full SmartAPI diagnostic - shows exactly why it fails."""
+    import traceback as tb
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    result = {
+        "credentials": {
+            "api_key_found": bool(os.getenv("ANGEL_API_KEY")),
+            "client_code_found": bool(os.getenv("ANGEL_CLIENT_CODE")),
+            "pin_found": bool(os.getenv("ANGEL_PIN")),
+            "totp_secret_found": bool(os.getenv("ANGEL_TOTP_SECRET")),
+            "api_key_preview": os.getenv("ANGEL_API_KEY", "")[:8] + "..." if os.getenv("ANGEL_API_KEY") else "MISSING",
+            "client_code_preview": os.getenv("ANGEL_CLIENT_CODE", "")[:4] + "..." if os.getenv("ANGEL_CLIENT_CODE") else "MISSING",
+        },
+        "login": {},
+        "profile": {},
+        "ltp_test": {},
+        "candle_test": {},
+        "error": None,
+        "stack_trace": None,
+    }
+
+    try:
+        import pyotp
+        from SmartApi import SmartConnect
+
+        api_key = os.getenv("ANGEL_API_KEY")
+        client_code = os.getenv("ANGEL_CLIENT_CODE")
+        pin = os.getenv("ANGEL_PIN")
+        totp_secret = os.getenv("ANGEL_TOTP_SECRET")
+
+        # Generate TOTP
+        totp_value = pyotp.TOTP(totp_secret).now()
+        result["totp_generated"] = totp_value[:3] + "***"
+
+        # Login
+        smart = SmartConnect(api_key=api_key)
+        session = smart.generateSession(client_code, pin, totp_value)
+        result["login"] = {
+            "status": session.get("status") if session else None,
+            "message": session.get("message", "") if session else "null response",
+            "data_keys": list(session.get("data", {}).keys()) if session and session.get("data") else [],
+        }
+
+        if not session or not session.get("status"):
+            result["error"] = "Login failed"
+            return jsonify(result)
+
+        # Profile
+        try:
+            profile = smart.getProfile(session["data"]["refreshToken"])
+            result["profile"] = {
+                "status": "ok",
+                "name": profile.get("data", {}).get("name", "unknown") if profile else "failed",
+            }
+        except Exception as e:
+            result["profile"] = {"error": str(e)}
+
+        # LTP Test
+        try:
+            ltp = smart.ltpData("NSE", "NIFTY", "99926000")
+            result["ltp_test"] = {
+                "status": ltp.get("status") if ltp else False,
+                "data": ltp.get("data") if ltp else None,
+                "message": ltp.get("message", "") if ltp else "null",
+            }
+        except Exception as e:
+            result["ltp_test"] = {"error": str(e)}
+
+        # Historical Candle Test
+        try:
+            from datetime import timedelta
+            params = {
+                "exchange": "NSE",
+                "symboltoken": "99926000",
+                "interval": "FIVE_MINUTE",
+                "fromdate": (datetime.now() - timedelta(days=5)).strftime("%Y-%m-%d 09:15"),
+                "todate": datetime.now().strftime("%Y-%m-%d 15:30"),
+            }
+            result["candle_params"] = params
+            hist = smart.getCandleData(params)
+            result["candle_test"] = {
+                "status": hist.get("status") if hist else False,
+                "message": hist.get("message", "") if hist else "null response",
+                "errorcode": hist.get("errorcode", "") if hist else "",
+                "data_type": type(hist.get("data")).__name__ if hist else "none",
+                "data_length": len(hist.get("data", [])) if hist and hist.get("data") else 0,
+                "sample": hist["data"][:2] if hist and hist.get("data") and len(hist["data"]) > 0 else None,
+            }
+        except Exception as e:
+            result["candle_test"] = {"error": str(e), "trace": tb.format_exc()}
+
+    except ImportError as e:
+        result["error"] = f"Import error: {e}"
+        result["stack_trace"] = tb.format_exc()
+    except Exception as e:
+        result["error"] = str(e)
+        result["stack_trace"] = tb.format_exc()
+
+    return jsonify(result)
 
     symbols = ["^NSEI", "^NSEBANK", "RELIANCE.NS", "TCS.NS", "AAPL", "MSFT"]
     output = {}
