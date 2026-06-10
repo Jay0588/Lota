@@ -712,6 +712,42 @@ def debug_yahoo():
     return jsonify(output)
 
 
+@app.route("/api/debug-providers")
+def debug_providers():
+    """Test multiple tickers across Yahoo to identify what works on this server."""
+    import yfinance as yf
+
+    symbols = ["^NSEI", "^NSEBANK", "RELIANCE.NS", "TCS.NS", "AAPL", "MSFT"]
+    output = {}
+
+    for symbol in symbols:
+        try:
+            start = time.time()
+            data = yf.download(symbol, period="5d", interval="1d", progress=False, auto_adjust=True)
+            duration = round(time.time() - start, 2)
+
+            if isinstance(data.columns, pd.MultiIndex):
+                data.columns = data.columns.get_level_values(0)
+
+            output[symbol] = {
+                "rows": len(data),
+                "empty": data.empty,
+                "last_close": round(float(data["Close"].iloc[-1]), 2) if not data.empty else None,
+                "duration_sec": duration,
+            }
+        except Exception as e:
+            output[symbol] = {"error": str(e)}
+
+    output["_meta"] = {
+        "timestamp": datetime.now().isoformat(),
+        "python": platform.python_version(),
+        "platform": platform.platform(),
+        "is_render": os.getenv("RENDER", "") != "",
+    }
+
+    return jsonify(output)
+
+
 @app.route("/api/news")
 def api_news():
     """Fast news endpoint - returns cached headlines from last brief."""
